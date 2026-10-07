@@ -1,0 +1,222 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import icon, csrf %}
+
+{% block title %}Dashboard - Expense Tracker{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_actions %}
+<a class="btn btn-primary hide-mobile" href="{{ url_for('add_expense') }}">{{ icon('plus') }}Add expense</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Overview: this month at a glance + key numbers -->
+<section class="overview" aria-label="Overview">
+
+  <div class="hero">
+    <div>
+      <p class="hero-label">Spent in {{ month_label }}</p>
+      <p class="hero-amount">{{ month_total|inr }}</p>
+    </div>
+
+    {% if delta %}
+    <p class="delta {{ delta.dir }}">
+      {{ icon(delta.dir, 16) }}
+      {% if delta.dir == 'flat' %}Same as last month so far
+      {% else %}{{ delta.pct }}% {{ 'more' if delta.dir == 'up' else 'less' }} than the same days last month{% endif %}
+    </p>
+    {% else %}
+    <p class="delta flat">No spending last month to compare with</p>
+    {% endif %}
+
+    {% if budget > 0 %}
+    <div>
+      <div class="meter {{ budget_state }}" role="progressbar" aria-label="Monthly budget used"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ budget_bar }}">
+        <span data-progress="{{ budget_bar }}"></span>
+      </div>
+      <p class="hero-note">
+        {{ month_total|inr }} of {{ budget|inr }} used.
+        {% if budget_left >= 0 %}{{ budget_left|inr }} left this month.{% else %}You are {{ (-budget_left)|inr }} over budget.{% endif %}
+      </p>
+    </div>
+    {% endif %}
+
+    {% if projected %}
+    <p class="hero-note">At this pace you will spend about {{ projected|inr }} by the end of {{ month_label }}.</p>
+    {% endif %}
+
+    <details class="budget-edit">
+      <summary>{{ 'Change monthly budget' if budget > 0 else 'Set a monthly budget' }}</summary>
+      <form method="post" action="{{ url_for('set_budget') }}" class="budget-form">
+        {{ csrf() }}
+        <label class="sr-only" for="monthly_budget">Monthly budget in rupees</label>
+        <input id="monthly_budget" name="monthly_budget" type="number" inputmode="decimal" min="0" step="1"
+               value="{{ '%d'|format(budget) if budget > 0 else '' }}" placeholder="Example: 25000">
+        <button class="btn btn-light" type="submit">Save</button>
+      </form>
+      <p class="hero-note">Enter 0 to remove your budget.</p>
+    </details>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <p class="kpi-label">Today</p>
+      <p class="kpi-value">{{ today_total|inr }}</p>
+    </div>
+    <div class="kpi">
+      <p class="kpi-label">All time</p>
+      <p class="kpi-value">{{ all_total|inr }}</p>
+      <p class="kpi-sub">{{ all_count }} expense{{ '' if all_count == 1 else 's' }}</p>
+    </div>
+    <div class="kpi">
+      <p class="kpi-label">Daily average</p>
+      <p class="kpi-value">{{ daily_avg|inr }}</p>
+      <p class="kpi-sub">so far in {{ month_label }}</p>
+    </div>
+    <div class="kpi">
+      <p class="kpi-label">Top category</p>
+      {% if top_category %}
+      <p class="kpi-value"><span class="dot {{ top_category.name|cat_class }}"></span>{{ top_category.name }}</p>
+      <p class="kpi-sub">{{ top_category.total|inr }} in {{ month_label }}</p>
+      {% else %}
+      <p class="kpi-value">None yet</p>
+      <p class="kpi-sub">Add an expense to see this</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- Charts -->
+<section class="charts" aria-label="Spending charts">
+  <div class="panel">
+    <h2>Last 6 months</h2>
+    <div class="chart-box">
+      <canvas id="trendChart" role="img" aria-label="Bar chart of total spending for each of the last six months"></canvas>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Where it went in {{ month_label }}</h2>
+    {% if categories %}
+    <div class="chart-box chart-box-sm">
+      <canvas id="categoryChart" role="img" aria-label="Doughnut chart of this month's spending by category"></canvas>
+    </div>
+    <ul class="cat-list">
+      {% for c in categories %}
+      <li>
+        <div class="cat-row">
+          <span class="dot {{ c.name|cat_class }}"></span>
+          <span class="cat-name">{{ c.name }}</span>
+          <span class="cat-amount">{{ c.total|inr }}</span>
+          <span class="cat-share">{{ c.share|round|int }}%</span>
+        </div>
+        <div class="meter meter-thin {{ c.name|cat_class }}"><span data-progress="{{ c.share }}"></span></div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-note">No expenses in {{ month_label }} yet. <a href="{{ url_for('add_expense') }}">Add your first one</a>.</p>
+    {% endif %}
+  </div>
+</section>
+
+<script type="application/json" id="chart-data">{{ chart|tojson }}</script>
+
+<!-- Expenses -->
+<section class="panel expenses" aria-labelledby="expenses-title">
+  <div class="section-head">
+    <h2 id="expenses-title">Expenses</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('export_csv', **filter_args) }}">{{ icon('download', 18) }}Export CSV</a>
+  </div>
+
+  <nav class="presets" aria-label="Date range">
+    {% for p in presets %}
+    <a class="chip-link {{ 'active' if p.active }}" href="{{ url_for('home', **p.args) }}" {% if p.active %}aria-current="true"{% endif %}>{{ p.label }}</a>
+    {% endfor %}
+  </nav>
+
+  <details class="filters" {% if filters_active %}open{% endif %}>
+    <summary>{{ icon('filter', 18) }}Search and filter</summary>
+    <form method="get" action="{{ url_for('home') }}" class="filter-form">
+      <div class="field field-search">
+        <label class="sr-only" for="search">Search</label>
+        <input id="search" type="search" name="search" value="{{ filters.search }}" placeholder="Search description or category" maxlength="100">
+      </div>
+      <div class="field">
+        <label for="category">Category</label>
+        <select id="category" name="category">
+          <option value="">All categories</option>
+          {% for c in CATEGORIES %}<option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="date_from">From</label>
+        <input id="date_from" type="date" name="date_from" value="{{ filters.date_from }}">
+      </div>
+      <div class="field">
+        <label for="date_to">To</label>
+        <input id="date_to" type="date" name="date_to" value="{{ filters.date_to }}">
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">{{ icon('search', 18) }}Apply</button>
+        <a class="btn btn-ghost" href="{{ url_for('home') }}">Clear</a>
+      </div>
+    </form>
+  </details>
+
+  {% if expenses %}
+  <p class="result-summary">
+    {{ count }} expense{{ '' if count == 1 else 's' }}{% if filters_active %} found{% endif %}, totalling <strong>{{ filtered_total|inr }}</strong>
+  </p>
+
+  <div class="tx-head" aria-hidden="true">
+    <span class="tx-date">Date</span><span class="tx-desc">Description</span>
+    <span class="tx-cat">Category</span><span class="tx-amount">Amount</span><span class="tx-actions"></span>
+  </div>
+  <ul class="tx-list">
+    {% for e in expenses %}
+    <li class="tx">
+      <span class="tx-desc">{{ e['description'] or e['category'] }}</span>
+      <span class="tx-amount">{{ e['amount']|inr }}</span>
+      <div class="tx-info">
+        <span class="tx-cat"><span class="chip {{ e['category']|cat_class }}">{{ e['category'] }}</span></span>
+        <time class="tx-date" datetime="{{ e['date'] }}">{{ e['date']|pretty_date }}</time>
+      </div>
+      <div class="tx-actions">
+        <a class="icon-btn" href="{{ url_for('edit_expense', expense_id=e['id']) }}" aria-label="Edit expense {{ e['description'] or e['category'] }}">{{ icon('edit', 18) }}</a>
+        <form method="post" action="{{ url_for('delete_expense', expense_id=e['id']) }}" data-confirm="Delete this expense? This cannot be undone.">
+          {{ csrf() }}
+          <button class="icon-btn danger" type="submit" aria-label="Delete expense {{ e['description'] or e['category'] }}">{{ icon('trash', 18) }}</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Pagination">
+    {% if page > 1 %}<a class="btn btn-ghost" href="{{ url_for('home', page=page - 1, **filter_args) }}">Previous</a>{% else %}<span class="btn btn-ghost disabled" aria-disabled="true">Previous</span>{% endif %}
+    <span class="pager-info">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a class="btn btn-ghost" href="{{ url_for('home', page=page + 1, **filter_args) }}">Next</a>{% else %}<span class="btn btn-ghost disabled" aria-disabled="true">Next</span>{% endif %}
+  </nav>
+  {% endif %}
+
+  {% elif filters_active %}
+  <div class="empty">
+    <p><strong>No expenses match these filters.</strong></p>
+    <p class="muted">Try a different search or date range.</p>
+    <a class="btn btn-ghost" href="{{ url_for('home') }}">Clear filters</a>
+  </div>
+  {% else %}
+  <div class="empty">
+    <p><strong>No expenses yet.</strong></p>
+    <p class="muted">Add your first expense to start building your dashboard.</p>
+    <a class="btn btn-primary" href="{{ url_for('add_expense') }}">{{ icon('plus', 18) }}Add expense</a>
+  </div>
+  {% endif %}
+</section>
+
+{% endblock %}

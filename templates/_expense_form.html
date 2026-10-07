@@ -1,0 +1,44 @@
+{% from "_macros.html" import csrf %}
+{% if errors %}
+<div class="alert alert-error" role="alert">
+  <ul class="error-list">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<form method="post" action="{{ action }}" class="stack" novalidate>
+  {{ csrf() }}
+
+  <div class="field">
+    <label for="amount">Amount</label>
+    <div class="input-prefix">
+      <span aria-hidden="true">₹</span>
+      <input id="amount" type="number" name="amount" step="0.01" min="0.01" inputmode="decimal" value="{{ form.amount }}" placeholder="0.00" required>
+    </div>
+  </div>
+
+  <fieldset class="field">
+    <legend>Category</legend>
+    <div class="pill-group">
+      {% for c in CATEGORIES %}
+      <label class="pill {{ c|cat_class }}">
+        <input type="radio" name="category" value="{{ c }}" {% if form.category == c %}checked{% endif %} required>
+        <span>{{ c }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <div class="field">
+    <label for="description">Description <span class="optional">(optional)</span></label>
+    <input id="description" type="text" name="description" value="{{ form.description }}" maxlength="200" placeholder="Example: Lunch with team" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="date">Date</label>
+    <input id="date" type="date" name="date" value="{{ form.date }}" required>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ submit_label }}</button>
+    <a class="btn btn-ghost" href="{{ url_for('home') }}">Cancel</a>
+  </div>
+</form>

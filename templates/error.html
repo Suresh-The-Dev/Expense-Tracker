@@ -1,0 +1,8 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ title }} - Expense Tracker{% endblock %}
+{% block auth_content %}
+<p class="error-code">{{ code }}</p>
+<h1>{{ title }}</h1>
+{% if message %}<p class="muted">{{ message }}</p>{% endif %}
+<p><a class="btn btn-primary btn-block" href="{{ url_for('home') }}">Go to dashboard</a></p>
+{% endblock %}

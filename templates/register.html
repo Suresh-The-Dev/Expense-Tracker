@@ -1,0 +1,25 @@
+{% extends "auth_base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Create account - Expense Tracker{% endblock %}
+{% block auth_content %}
+<h1>Create your account</h1>
+<p class="muted">Track spending in a minute. It works great on your phone.</p>
+<form method="post" action="{{ url_for('register') }}" class="stack" novalidate>
+  {{ csrf() }}
+  <div class="field">
+    <label for="username">Username</label>
+    <input id="username" type="text" name="username" value="{{ form.username }}" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" required>
+  </div>
+  <div class="field">
+    <label for="email">Email</label>
+    <input id="email" type="email" name="email" value="{{ form.email }}" maxlength="100" autocomplete="email" inputmode="email" autocapitalize="none" required>
+  </div>
+  <div class="field">
+    <label for="password">Password</label>
+    <input id="password" type="password" name="password" minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="pw-hint" required>
+    <p class="hint" id="pw-hint">At least 8 characters.</p>
+  </div>
+  <button class="btn btn-primary btn-block" type="submit">Create account</button>
+</form>
+<p class="auth-switch">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
+{% endblock %}

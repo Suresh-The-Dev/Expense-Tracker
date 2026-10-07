@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<main id="main" class="auth">
+  <div class="auth-card">
+    <a class="brand auth-brand" href="{{ url_for('home') }}">
+      <span class="brand-mark" aria-hidden="true">₹</span><span>Expense Tracker</span>
+    </a>
+    {% include "_flashes.html" %}
+    {% block auth_content %}{% endblock %}
+  </div>
+</main>
+{% endblock %}

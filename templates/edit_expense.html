@@ -1,0 +1,10 @@
+{% extends "app_base.html" %}
+{% block title %}Edit expense - Expense Tracker{% endblock %}
+{% block page_title %}Edit expense{% endblock %}
+{% block content %}
+<div class="panel form-panel">
+  {% set action = url_for('edit_expense', expense_id=expense['id']) %}
+  {% set submit_label = 'Save changes' %}
+  {% include "_expense_form.html" %}
+</div>
+{% endblock %}
